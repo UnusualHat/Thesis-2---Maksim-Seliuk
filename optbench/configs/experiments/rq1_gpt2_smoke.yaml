@@ -1,0 +1,57 @@
+# Tiny GPU config to validate the real GPT-2 + LoRA path through the RQ1 pipeline
+# before committing to the multi-hour thorough run. 2 trials, 2 seeds, short budget.
+name: rq1_gpt2_smoke
+rq: rq1
+
+workload:
+  name: gpt2_wikitext2_lora
+  task: causal_lm
+  model_kind: hf_causal
+  model_name: gpt2
+  dataset: wikitext2
+  seq_len: 256
+  micro_batch_size: 4
+  grad_accum_steps: 1
+  eval_metric: val_loss
+  lora:
+    enabled: true
+    r: 8
+    alpha: 16
+    dropout: 0.05
+    target_modules: [c_attn]
+  extras:
+    max_train_blocks: 64
+    max_eval_blocks: 16
+
+budget:
+  kind: steps
+  max_steps: 40
+  eval_every_steps: 20
+  warmup_ratio: 0.1
+  scheduler: cosine
+  grad_clip: 1.0
+
+optimizers:
+  - {name: adamw, defaults: {betas: [0.9, 0.999], weight_decay: 0.01}}
+  - {name: lion,  defaults: {betas: [0.9, 0.99], weight_decay: 0.0}}
+
+search_spaces:
+  adamw:
+    optimizer: adamw
+    n_trials: 2
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-4, high: 1.0e-3}]
+  lion:
+    optimizer: lion
+    n_trials: 2
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-5, high: 1.0e-4}]
+
+seeds:
+  sweep_seed: 0
+  final_seeds: [0, 1]
+
+target_metric_value: 3.6
+
+runtime:
+  device: cuda
+  precision: bf16
+  results_root: results/runs

@@ -1,0 +1,4 @@
+pair,U,p
+adamw_vs_sgd_momentum,0.0,0.1
+adamw_vs_lion,0.0,0.1
+adamw_vs_sophia,0.0,0.1

@@ -1,0 +1,75 @@
+# RQ1/RQ2: equal-budget LR sweep over 4 optimizers on GPT-2 + WikiText-2 (LoRA).
+# Thorough: 18 LR points per optimizer, ~800 steps, K=5 seeds on the best config.
+# Fairness invariant: workload + budget + sweep_seed identical; only LR varies.
+name: rq1_gpt2_lora
+rq: rq1
+
+workload:
+  name: gpt2_wikitext2_lora
+  task: causal_lm
+  model_kind: hf_causal
+  model_name: gpt2
+  dataset: wikitext2
+  seq_len: 256
+  micro_batch_size: 8
+  grad_accum_steps: 1
+  eval_metric: val_loss
+  lora:
+    enabled: true
+    r: 8
+    alpha: 16
+    dropout: 0.05
+    target_modules: [c_attn]
+  extras:
+    max_train_blocks: 2500
+    max_eval_blocks: 128
+
+budget:
+  kind: steps
+  max_steps: 800
+  eval_every_steps: 100
+  warmup_ratio: 0.05
+  scheduler: cosine
+  grad_clip: 1.0
+
+optimizers:
+  - {name: sgd_momentum, defaults: {momentum: 0.9, nesterov: true}}
+  - {name: adamw,        defaults: {betas: [0.9, 0.999], weight_decay: 0.01}}
+  - {name: lion,         defaults: {betas: [0.9, 0.99], weight_decay: 0.0}}
+  - {name: sophia,       defaults: {rho: 0.04, betas: [0.965, 0.99]}}
+
+# Pre-declared LR ranges per optimizer (Choi 2019): equal budget, fixed up front.
+search_spaces:
+  sgd_momentum:
+    optimizer: sgd_momentum
+    n_trials: 18
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-3, high: 1.0}]
+  adamw:
+    optimizer: adamw
+    n_trials: 18
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-5, high: 1.0e-2}]
+  lion:
+    optimizer: lion
+    n_trials: 18
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-6, high: 1.0e-3}]
+  sophia:
+    optimizer: sophia
+    n_trials: 18
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-5, high: 1.0e-2}]
+
+seeds:
+  sweep_seed: 0
+  final_seeds: [0, 1, 2, 3, 4]
+
+# Time-to-target threshold (val_loss), AlgoPerf-style: a small margin above the
+# slowest optimizer's converged floor (Lion ~3.188), so every optimizer's best
+# config reaches it across all seeds and the steps-to-target ranking is meaningful.
+# (3.36 was too easy: all best configs crossed it at the first eval, step 100.)
+# steps_to_target is recomputed from each run's eval history at this value, so this
+# can be retuned without re-running the sweep.
+target_metric_value: 3.20
+
+runtime:
+  device: cuda
+  precision: bf16
+  results_root: results/runs

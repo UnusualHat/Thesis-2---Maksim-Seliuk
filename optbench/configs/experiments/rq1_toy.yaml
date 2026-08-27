@@ -1,0 +1,44 @@
+# Tiny CPU config to smoke the full RQ1 pipeline end-to-end (fast).
+name: rq1_toy
+rq: rq1
+
+workload:
+  name: toy_reg
+  task: regression
+  model_kind: toy_mlp
+  micro_batch_size: 32
+  eval_metric: val_loss
+  extras: {in_dim: 8, hidden: 32}
+
+budget:
+  kind: steps
+  max_steps: 80
+  eval_every_steps: 40
+  warmup_ratio: 0.0
+  scheduler: none
+  grad_clip: 1.0
+
+optimizers:
+  - {name: adamw, defaults: {betas: [0.9, 0.999], weight_decay: 0.01}}
+  - {name: lion,  defaults: {betas: [0.9, 0.99], weight_decay: 0.0}}
+
+search_spaces:
+  adamw:
+    optimizer: adamw
+    n_trials: 4
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-3, high: 1.0e-1}]
+  lion:
+    optimizer: lion
+    n_trials: 4
+    ranges: [{name: lr, kind: log_uniform, low: 1.0e-4, high: 1.0e-2}]
+
+seeds:
+  sweep_seed: 0
+  final_seeds: [0, 1]
+
+target_metric_value: null
+
+runtime:
+  device: cpu
+  precision: fp32
+  results_root: results/runs
